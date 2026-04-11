@@ -290,6 +290,16 @@ input,select{font-family:inherit;color:inherit}
 .validation-msg.info{background:var(--val-info-bg);border:1px solid var(--val-info-border);color:var(--val-info-text)}
 /* Rule violation toast */
 .rule-toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:10000;background:#5c1a1a;color:#ffd6d6;padding:12px 20px;border-radius:8px;border:1px solid #8b2a2a;font-size:.82rem;line-height:1.4;max-width:420px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.4);animation:toastIn .3s ease,toastOut .4s ease 3s forwards;pointer-events:none;font-family:'DM Sans',sans-serif}
+.exit-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .2s ease}
+.exit-modal{background:var(--bg2);border-radius:12px;padding:28px 24px;max-width:400px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.3);text-align:center;font-family:'DM Sans',sans-serif}
+.exit-modal h3{font-family:var(--font-display);font-size:1.2rem;color:var(--gold);margin:0 0 8px}
+.exit-modal p{font-size:.8rem;color:var(--text-muted);margin:0 0 16px;line-height:1.5}
+.exit-modal input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:6px;font-size:.85rem;margin-bottom:12px;box-sizing:border-box;background:var(--bg);color:var(--text)}
+.exit-modal .exit-err{color:#c0392b;font-size:.7rem;margin:-8px 0 10px;display:none}
+.exit-modal .exit-btns{display:flex;gap:10px}
+.exit-modal .exit-btns button{flex:1;padding:10px;border-radius:6px;font-size:.8rem;cursor:pointer;border:none}
+.exit-modal .btn-exit-submit{background:var(--gold);color:#fff}
+.exit-modal .btn-exit-skip{background:transparent;border:1px solid var(--border)!important;color:var(--text-muted)}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 @keyframes toastOut{from{opacity:1}to{opacity:0}}
 
@@ -587,9 +597,13 @@ const state = {
   ringSize: null,
   engraving: '',
   email: '',
+  notes: '',
   spotPrices: {Gold:4640, Platinum:1980, Silver:72}, // defaults updated April 2026, live prices fetched on load
   spotsLoaded: false
 };
+
+const QUOTE_WORKER_URL = 'https://jbj-ring-quote.johan-475.workers.dev/';
+const _staffMode = new URLSearchParams(window.location.search).has('staff');
 
 // ── UNDO STACK ──
 const undoStack=[];
@@ -703,10 +717,14 @@ function getAllGroups(){
   const sorted=[...groups].sort();
   const wi=sorted.indexOf('Woods');
   if(wi>=0){
-    sorted[wi]='Popular Woods';
-    sorted.splice(wi+1,0,'Other Woods');
+    sorted[wi]='most popular Woods';
+    sorted.splice(wi+1,0,'other Woods');
   }
-  return sorted;
+  // Priority groups first, then rest in existing order
+  const priority=['Meteorite','Dinosaur Bone','Antler','most popular Woods'];
+  const top=priority.filter(g=>sorted.includes(g));
+  const rest=sorted.filter(g=>!priority.includes(g));
+  return [...top,...rest];
 }
 
 // ── PRICING ENGINE ──
@@ -1461,7 +1479,11 @@ function renderStepsBar(){
       h('button',{
         class:'dot'+(i===state.step?' active':'')+(i<state.step?' done':''),
         title:step.label+': '+step.tip,
-        onClick:()=>{if(i<=state.step)goToStep(i);}
+        onClick:()=>{if(i<=state.step){
+          if(state.step===STEPS.length-1 && i<state.step && !state._quoteSubmitted && !(/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(state.email))){
+            showExitEmailModal(()=>goToStep(i));
+          } else { goToStep(i); }
+        }}
       },[i<state.step?'✓':String(step.num)]),
       h('div',{class:'step-label'},[step.label]),
     ]);
@@ -1488,10 +1510,86 @@ function goToStep(idx){
     }
   }
   state.step=idx;
+  // beforeunload guard on Step 7 (summary)
+  if(idx===STEPS.length-1 && !state._quoteSubmitted){
+    window.addEventListener('beforeunload',_exitGuard);
+    document.addEventListener('mouseout',_exitIntentHandler);
+    _exitIntentShown=false;
+  } else {
+    window.removeEventListener('beforeunload',_exitGuard);
+    document.removeEventListener('mouseout',_exitIntentHandler);
+  }
   renderStepsBar();
   renderPanel();
   renderRing();
   updatePrice();
+}
+
+function _getCanvasImage(){
+  const c=document.querySelector('#ringPreview canvas');
+  if(!c)return null;
+  try{ return c.toDataURL('image/png').split(',')[1]; }catch(e){ return null; }
+}
+
+function _exitGuard(e){ if(!state._quoteSubmitted){ e.preventDefault(); e.returnValue=''; } }
+
+let _exitIntentShown=false;
+function _exitIntentHandler(e){
+  if(e.clientY>0 || _exitIntentShown || state._quoteSubmitted) return;
+  if(!(/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(state.email))){
+    _exitIntentShown=true;
+    showExitEmailModal(null);
+  }
+}
+
+function showExitEmailModal(onDone){
+  const isValid=(e)=>/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
+  const overlay=document.createElement('div');
+  overlay.className='exit-overlay';
+  overlay.innerHTML=`<div class="exit-modal">
+    <h3>Before you go...</h3>
+    <p>Enter your email so we can send you a quote for this custom ring design.</p>
+    <input type="email" placeholder="your@email.com" value="${state.email||''}" />
+    <div class="exit-err">Please enter a valid email address.</div>
+    <div class="exit-btns">
+      <button class="btn-exit-skip">Leave without email</button>
+      <button class="btn-exit-submit">Send my quote</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  const inp=overlay.querySelector('input');
+  const err=overlay.querySelector('.exit-err');
+  inp.focus();
+  overlay.querySelector('.btn-exit-submit').onclick=async()=>{
+    const email=inp.value.trim();
+    if(!isValid(email)){ err.style.display='block'; inp.style.borderColor='#c0392b'; inp.focus(); return; }
+    state.email=email;
+    overlay.querySelector('.btn-exit-submit').textContent='Sending...';
+    overlay.querySelector('.btn-exit-submit').disabled=true;
+    // Fire the quote to the worker
+    const result=calcPrice();
+    const config={bm:state.baseMetal,w:state.ringWidth,p:state.profile,st:state.strips,sl:state.sleeve,f:state.finish,sz:state.ringSize,eng:state.engraving,wi:state.wantsInlays};
+    const shareUrl=window.location.origin+window.location.pathname+'?design='+btoa(JSON.stringify(config));
+    try{
+      await fetch(QUOTE_WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        email:state.email,notes:state.notes,baseMetal:state.baseMetal,ringSize:state.ringSize,ringWidth:state.ringWidth,
+        profile:state.profile,sleeve:state.sleeve,finish:state.finish,engraving:state.engraving,
+        strips:state.strips,breakdown:result?result.breakdown:[],total:result?result.total:0,shareUrl,
+        ringImage:_getCanvasImage()
+      })});
+      state._quoteSubmitted=true;
+      window.removeEventListener('beforeunload',_exitGuard);
+      document.removeEventListener('mouseout',_exitIntentHandler);
+    }catch(e){console.error(e);}
+    overlay.remove();
+    if(onDone)onDone();
+  };
+  overlay.querySelector('.btn-exit-skip').onclick=()=>{
+    window.removeEventListener('beforeunload',_exitGuard);
+    document.removeEventListener('mouseout',_exitIntentHandler);
+    overlay.remove();
+    if(onDone)onDone();
+  };
 }
 
 // ── RENDER PANELS ──
@@ -1515,9 +1613,10 @@ function renderPanel(){
     case 'summary': renderSummaryPanel(col); break;
   }
   updateCanvasUndoBtn();
-  // Show/hide sticky price bar (hidden on step 1)
+  // Show/hide sticky price bar
   const priceBarM=document.getElementById('priceBarMobile');
-  if(priceBarM) priceBarM.style.display=isSize?'none':'flex';
+  const showBar=_staffMode ? !isSize : (STEPS[state.step].id==='summary');
+  if(priceBarM) priceBarM.style.display=showBar?'flex':'none';
 }
 
 // ── STEP 1: RING SIZE ──
@@ -2580,8 +2679,8 @@ function openAddStripModal(){
     // Material grid — default: show inlay materials only; 'All' shows everything
     const grid=h('div',{class:'mat-grid',style:{maxHeight:'200px'}});
     let materials=Object.keys(DATA.m);
-    if(groupFilter==='Popular Woods') materials=materials.filter(n=>DATA.m[n].g==='Woods'&&POPULAR_WOODS.has(n));
-    else if(groupFilter==='Other Woods') materials=materials.filter(n=>DATA.m[n].g==='Woods'&&!POPULAR_WOODS.has(n));
+    if(groupFilter==='most popular Woods') materials=materials.filter(n=>DATA.m[n].g==='Woods'&&POPULAR_WOODS.has(n));
+    else if(groupFilter==='other Woods') materials=materials.filter(n=>DATA.m[n].g==='Woods'&&!POPULAR_WOODS.has(n));
     else if(groupFilter!=='All') materials=materials.filter(n=>DATA.m[n].g===groupFilter);
     else materials=materials.filter(n=>!isMetal(n));
     if(searchFilter) materials=materials.filter(n=>n.toLowerCase().includes(searchFilter.toLowerCase()));
@@ -2706,8 +2805,8 @@ function openEditStripModal(idx){
     // Material grid — ALL materials shown
     const grid=h('div',{class:'mat-grid',style:{maxHeight:'200px'}});
     let materials=Object.keys(DATA.m);
-    if(groupFilter==='Popular Woods') materials=materials.filter(n=>DATA.m[n].g==='Woods'&&POPULAR_WOODS.has(n));
-    else if(groupFilter==='Other Woods') materials=materials.filter(n=>DATA.m[n].g==='Woods'&&!POPULAR_WOODS.has(n));
+    if(groupFilter==='most popular Woods') materials=materials.filter(n=>DATA.m[n].g==='Woods'&&POPULAR_WOODS.has(n));
+    else if(groupFilter==='other Woods') materials=materials.filter(n=>DATA.m[n].g==='Woods'&&!POPULAR_WOODS.has(n));
     else if(groupFilter!=='All') materials=materials.filter(n=>DATA.m[n].g===groupFilter);
     if(searchFilter) materials=materials.filter(n=>n.toLowerCase().includes(searchFilter.toLowerCase()));
     materials.sort();
@@ -2927,13 +3026,15 @@ function renderSummaryPanel(col){
   // Price breakdown
   if(result&&result.breakdown.length){
     const section3=h('div',{class:'summary-section'});
-    section3.appendChild(h('h4',{},['Price Breakdown']));
-    result.breakdown.forEach(item=>{
-      const row=h('div',{class:'summary-row'});
-      row.appendChild(h('span',{class:'label'},[item.label]));
-      row.appendChild(h('span',{class:'price'},['$'+item.price.toFixed(2)]));
-      section3.appendChild(row);
-    });
+    if(_staffMode){
+      section3.appendChild(h('h4',{},['Price Breakdown']));
+      result.breakdown.forEach(item=>{
+        const row=h('div',{class:'summary-row'});
+        row.appendChild(h('span',{class:'label'},[item.label]));
+        row.appendChild(h('span',{class:'price'},['$'+item.price.toFixed(2)]));
+        section3.appendChild(row);
+      });
+    }
     
     const total=h('div',{class:'summary-total'});
     total.appendChild(h('span',{class:'label'},['Estimated Total']));
@@ -2948,16 +3049,23 @@ function renderSummaryPanel(col){
   
   // Engraving (optional)
   const engSection=h('div',{class:'summary-section'});
-  engSection.appendChild(h('h4',{},['Inside Engraving (Optional)']));
+  engSection.appendChild(h('h4',{},['Inside Laser Engraving (Optional)']));
   const engPreview=h('div',{class:'engraving-preview'},[state.engraving||'Your text here...']);
   engSection.appendChild(engPreview);
-  engSection.appendChild(h('input',{class:'engraving-input',type:'text',placeholder:'Enter engraving text...',value:state.engraving,maxlength:'40',
+  const engCounter=h('span',{style:{fontSize:'.68rem',color:'var(--text-muted)'}},[(state.engraving||'').length+' / 25']);
+  engSection.appendChild(h('input',{class:'engraving-input',type:'text',placeholder:'Enter engraving text...',value:state.engraving,maxlength:'25',
     onInput:(e)=>{
       state.engraving=e.target.value;
       engPreview.textContent=e.target.value||'Your text here...';
+      engCounter.textContent=e.target.value.length+' / 25';
     }
   }));
-  engSection.appendChild(h('p',{style:{fontSize:'.68rem',color:'var(--text-muted)'}},['Maximum 40 characters. Standard block font.']));
+  engSection.appendChild(h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'4px'}},
+    [engCounter]
+  ));
+  const engLink=h('p',{style:{fontSize:'.68rem',color:'var(--text-muted)',lineHeight:'1.5'}});
+  engLink.innerHTML='See engraving <a href="https://jewelrybyjohan.com/products/custom-laser-engraving-srv01" target="_blank" rel="noopener" style="color:var(--gold);text-decoration:underline">examples, fonts &amp; details</a>.';
+  engSection.appendChild(engLink);
   col.appendChild(engSection);
   
   // Email form
@@ -2972,25 +3080,98 @@ function renderSummaryPanel(col){
   
   const emailRow=h('div',{class:'form-row'});
   emailRow.appendChild(h('label',{},['Email Address']));
-  emailRow.appendChild(h('input',{type:'email',placeholder:'your@email.com',value:state.email,
-    onInput:(e)=>{state.email=e.target.value;}
-  }));
+  const emailInput=h('input',{type:'email',id:'quoteEmail',placeholder:'your@email.com',value:state.email,
+    onInput:(e)=>{
+      state.email=e.target.value.trim();
+      emailErr.style.display='none';
+      emailInput.style.borderColor='';
+    }
+  });
+  emailRow.appendChild(emailInput);
+  const emailErr=h('div',{style:{color:'#c0392b',fontSize:'.7rem',marginTop:'4px',display:'none'}},['Please enter a valid email address.']);
+  emailRow.appendChild(emailErr);
   form.appendChild(emailRow);
   
   const notesRow=h('div',{class:'form-row'});
   notesRow.appendChild(h('label',{},['Additional Notes (optional)']));
-  notesRow.appendChild(h('textarea',{placeholder:'Any special requests or questions...'}));
+  const notesTA=h('textarea',{placeholder:'Any special requests or questions...',
+    onInput:(e)=>{state.notes=e.target.value;}
+  });
+  notesTA.value=state.notes||'';
+  notesRow.appendChild(notesTA);
   form.appendChild(notesRow);
   
-  form.appendChild(h('button',{class:'btn btn-gold',style:{width:'100%',padding:'12px',marginTop:'4px',fontSize:'.85rem'},
-    onClick:()=>{
-      if(!state.email||!state.email.includes('@')){
-        alert('Please enter a valid email address.');
+  const submitStatus=h('div',{style:{textAlign:'center',padding:'8px 0',fontSize:'.8rem',display:'none'}});
+  
+  const isValidEmail=(e)=>/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
+  
+  const submitBtn=h('button',{class:'btn btn-gold',style:{width:'100%',padding:'12px',marginTop:'4px',fontSize:'.85rem'},
+    onClick:async()=>{
+      if(!isValidEmail(state.email)){
+        emailErr.style.display='block';
+        emailInput.style.borderColor='#c0392b';
+        emailInput.focus();
         return;
       }
-      alert('Thank you! Your ring design has been submitted. We will review and send you a quote at '+state.email+'.');
+      submitBtn.disabled=true;
+      submitBtn.textContent='Sending...';
+      submitStatus.style.display='none';
+      
+      const config={
+        bm:state.baseMetal,w:state.ringWidth,p:state.profile,
+        st:state.strips,sl:state.sleeve,f:state.finish,
+        sz:state.ringSize,eng:state.engraving,wi:state.wantsInlays
+      };
+      const shareUrl=window.location.origin+window.location.pathname+'?design='+btoa(JSON.stringify(config));
+      
+      const payload={
+        email:state.email,
+        notes:state.notes,
+        baseMetal:state.baseMetal,
+        ringSize:state.ringSize,
+        ringWidth:state.ringWidth,
+        profile:state.profile,
+        sleeve:state.sleeve,
+        finish:state.finish,
+        engraving:state.engraving,
+        strips:state.strips,
+        breakdown:result?result.breakdown:[],
+        total:result?result.total:0,
+        shareUrl:shareUrl,
+        ringImage:_getCanvasImage()
+      };
+      
+      try{
+        const res=await fetch(QUOTE_WORKER_URL,{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify(payload)
+        });
+        const json=await res.json();
+        if(json.ok){
+          state._quoteSubmitted=true;
+          window.removeEventListener('beforeunload',_exitGuard);
+          document.removeEventListener('mouseout',_exitIntentHandler);
+          submitBtn.textContent='✓ Design Submitted!';
+          submitBtn.style.background='#4a7c59';
+          submitStatus.style.display='block';
+          submitStatus.style.color='var(--gold)';
+          submitStatus.textContent='A confirmation email has been sent to '+state.email+'. Our team will follow up with your final quote.';
+        } else {
+          throw new Error(json.error||'Send failed');
+        }
+      }catch(err){
+        console.error('Quote submit error:',err);
+        submitBtn.disabled=false;
+        submitBtn.textContent='Submit Design Request';
+        submitStatus.style.display='block';
+        submitStatus.style.color='#c0392b';
+        submitStatus.textContent='Something went wrong. Please try again or email us directly at support@jewelrybyjohan.com.';
+      }
     }
-  },['Submit Design Request']));
+  },['Submit Design Request']);
+  form.appendChild(submitBtn);
+  form.appendChild(submitStatus);
   col.appendChild(form);
   
   // Share link
@@ -3008,7 +3189,14 @@ function renderSummaryPanel(col){
   }},['Copy Share Link']));
   col.appendChild(shareSection);
   
-  col.appendChild(navButtons(true, false));
+  // Custom nav — Back button intercepts if no email submitted
+  const nav=h('div',{class:'nav-buttons'});
+  nav.appendChild(h('button',{class:'btn-nav btn-prev',onClick:()=>{
+    if(!state._quoteSubmitted && !(/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(state.email))){
+      showExitEmailModal(()=>goToStep(state.step-1));
+    } else { goToStep(state.step-1); }
+  }},['← Back']));
+  col.appendChild(nav);
 }
 
 function summaryRow(label,value){
