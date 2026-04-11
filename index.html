@@ -1574,7 +1574,7 @@ function showExitEmailModal(onDone){
       await fetch(QUOTE_WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
         email:state.email,notes:state.notes,baseMetal:state.baseMetal,ringSize:state.ringSize,ringWidth:state.ringWidth,
         profile:state.profile,sleeve:state.sleeve,finish:state.finish,engraving:state.engraving,
-        strips:state.strips,breakdown:result?result.breakdown:[],total:result?result.total:0,shareUrl,
+        strips:state.strips,breakdown:result?result.breakdown:[],total:result?result.total:0,spotPrices:state.spotPrices,shareUrl,
         ringImage:_getCanvasImage()
       })});
       state._quoteSubmitted=true;
@@ -3137,6 +3137,7 @@ function renderSummaryPanel(col){
         strips:state.strips,
         breakdown:result?result.breakdown:[],
         total:result?result.total:0,
+        spotPrices:state.spotPrices,
         shareUrl:shareUrl,
         ringImage:_getCanvasImage()
       };
@@ -3324,20 +3325,13 @@ const EMBEDDED_DATA = {"m":{"Antler":{"g":"Antler","s":"Flex","mi":{"solid_inlay
 document.addEventListener('DOMContentLoaded', init);
 </script>
 <script>
-  // Send height to parent Shopify iframe
-  (function() {
-    function postHeight() {
-      if (window.parent !== window) {
-        window.parent.postMessage({
-          type: 'ring-designer-height',
-          height: document.body.scrollHeight
-        }, '*');
-      }
-    }
-    window.addEventListener('load', postHeight);
-    window.addEventListener('resize', postHeight);
-    new MutationObserver(postHeight).observe(document.body, {childList:true, subtree:true});
-  })();
+// Iframe auto-height messaging for Shopify embed
+function postHeight(){
+  window.parent.postMessage({type:'ring-designer-height',height:document.body.scrollHeight},'*');
+}
+window.addEventListener('load',postHeight);
+window.addEventListener('resize',postHeight);
+new MutationObserver(postHeight).observe(document.body,{childList:true,subtree:true,attributes:true});
 </script>
 </body>
 </html>
