@@ -882,9 +882,9 @@ function calcPreciousMetalCost(metalName, ringWidthMm, ringSize, hasInlays){
   let karatFactor=1;
   if(metalName.includes('Platinum')){spotPerOz=state.spotPrices.Platinum;karatFactor=1;}
   else if(metalName.includes('Silver')){spotPerOz=state.spotPrices.Silver;karatFactor=1;}
-  else if(metalName.includes('10K')) karatFactor=(0x1047/0x2710);
-  else if(metalName.includes('14K')) karatFactor=(0x16C9/0x2710);
-  else if(metalName.includes('18K')) karatFactor=(0x4B/0x64);
+  else if(metalName.includes('10K')) karatFactor=10/24;
+  else if(metalName.includes('14K')) karatFactor=14/24;
+  else if(metalName.includes('18K')) karatFactor=18/24;
   
   const pricePerGram=(spotPerOz/(311034768/1e7))*karatFactor;
   const alloyCost=pricePerGram*weightScrap;
@@ -898,8 +898,8 @@ function calcPreciousMetalCost(metalName, ringWidthMm, ringSize, hasInlays){
 }
 
 function calcPinstripePrice(metalName, widthMm, ringSize, qty, isInlay){
-  // Pinstripes use outer-surface diameter; inlays use ring inner diameter
-  const dia=isInlay?(ringSize*0.8128+11.63):(22.1964+2.54*0.1016*(ringSize-13));
+  // Both pinstripes and inlays use outer-surface diameter (matches Excel pinstripe calculator)
+  const dia=22.1964+2.54*0.1016*(ringSize-13);
   const circ=Math.PI*dia;
   const depth=DATA.f.pinstripe_depth_mm||1.75;
   const vol=(widthMm*depth*circ*qty)/1000;
@@ -913,9 +913,9 @@ function calcPinstripePrice(metalName, widthMm, ringSize, qty, isInlay){
   let karatFactor=1;
   if(metalName.includes('Platinum')){spotPerOz=state.spotPrices.Platinum;karatFactor=1;}
   else if(metalName.includes('Silver')){spotPerOz=state.spotPrices.Silver;karatFactor=1;}
-  else if(metalName.includes('10K')) karatFactor=(0x1047/0x2710);
-  else if(metalName.includes('14K')) karatFactor=(0x16C9/0x2710);
-  else if(metalName.includes('18K')) karatFactor=(0x4B/0x64);
+  else if(metalName.includes('10K')) karatFactor=10/24;
+  else if(metalName.includes('14K')) karatFactor=14/24;
+  else if(metalName.includes('18K')) karatFactor=18/24;
   
   const pricePerGram=(spotPerOz/(311034768/1e7))*karatFactor;
   const matCost=pricePerGram*weightScrap;
