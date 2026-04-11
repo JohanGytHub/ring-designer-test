@@ -1,2 +1,2 @@
-# ring-designer-test
+# ring-designer
 Custom Ring Designer
