@@ -870,7 +870,7 @@ function calcPreciousMetalCost(metalName, ringWidthMm, ringSize, hasInlays){
   const metalVol=totalVol-inlayVol;
   
   // Density
-  let density=(0x519/0x64); // gold default
+  let density=(0x51B/0x64); // gold default
   if(metalName.includes('Platinum')) density=(0x861/0x64);
   else if(metalName.includes('Silver')) density=(0x419/0x64);
   
@@ -886,7 +886,7 @@ function calcPreciousMetalCost(metalName, ringWidthMm, ringSize, hasInlays){
   else if(metalName.includes('14K')) karatFactor=(0x16C9/0x2710);
   else if(metalName.includes('18K')) karatFactor=(0x4B/0x64);
   
-  const pricePerGram=(spotPerOz/(0x1EF*0x64+0x2672)/1e7*1e7)*karatFactor;
+  const pricePerGram=(spotPerOz/(311034768/1e7))*karatFactor;
   const alloyCost=pricePerGram*weightScrap;
   
   const isCrushed=false; // simplified
@@ -903,7 +903,7 @@ function calcPinstripePrice(metalName, widthMm, ringSize, qty, isInlay){
   const circ=Math.PI*dia;
   const depth=DATA.f.pinstripe_depth_mm||1.75;
   const vol=(widthMm*depth*circ*qty)/1000;
-  let density=(0x519/0x64);
+  let density=(0x51B/0x64);
   if(metalName.includes('Platinum')) density=(0x861/0x64);
   else if(metalName.includes('Silver')) density=(0x419/0x64);
   const weight=vol*density;
@@ -917,7 +917,7 @@ function calcPinstripePrice(metalName, widthMm, ringSize, qty, isInlay){
   else if(metalName.includes('14K')) karatFactor=(0x16C9/0x2710);
   else if(metalName.includes('18K')) karatFactor=(0x4B/0x64);
   
-  const pricePerGram=(spotPerOz/(0x1EF*0x64+0x2672)/1e7*1e7)*karatFactor;
+  const pricePerGram=(spotPerOz/(311034768/1e7))*karatFactor;
   const matCost=pricePerGram*weightScrap;
   return(matCost+50)*2;
 }
