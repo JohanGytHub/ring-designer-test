@@ -741,6 +741,7 @@ function calcPrice(){
   const bm=state.baseMetal;
   const slv=state.sleeve||bm;
   const hasInlays=state.strips.some(s=>!isMetal(s.material));
+  const hasNonMetalInlays=state.strips.some(s=>!isMetal(s.material)&&!isMetalGroup(s.material));
   
   // 1. Base metal cost (always included, as if sleeve = base metal)
   if(isPrecious(bm)){
@@ -756,7 +757,7 @@ function calcPrice(){
     const pData=DATA.p[bm];
     if(pData){
       let cost=0;
-      if(hasInlays && pData.sleeve_with_inlay) cost=pData.sleeve_with_inlay;
+      if(hasNonMetalInlays && pData.sleeve_with_inlay) cost=pData.sleeve_with_inlay;
       else if(pData.sleeve) cost=pData.sleeve;
       else if(pData.full_ring) cost=pData.full_ring;
       else if(pData.fixed_price) cost=pData.fixed_price;
@@ -779,7 +780,7 @@ function calcPrice(){
       const sData=DATA.p[slv];
       if(sData){
         let cost=0;
-        if(hasInlays && sData.sleeve_with_inlay) cost=sData.sleeve_with_inlay;
+        if(hasNonMetalInlays && sData.sleeve_with_inlay) cost=sData.sleeve_with_inlay;
         else if(sData.sleeve) cost=sData.sleeve;
         else if(sData.fixed_price) cost=sData.fixed_price;
         total+=cost;
