@@ -1705,7 +1705,6 @@ function renderMetalPanel(col){
     // Get materials for this group, moving Platinum to Precious
     let mats=getMaterialsByGroup(gName);
     if(gName==='Metals') mats=mats.filter(n=>n!=='Platinum');
-    if(gName==='Metals Precious') mats=[...mats,'Platinum'].sort();
     mats.forEach(name=>{
       const card=h('div',{
         class:'mat-card'+(state.baseMetal===name?' selected':''),
