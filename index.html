@@ -2283,11 +2283,17 @@ function renderComposePanel(col){
       // When creating a new metal strip on right, need at least bmMinW
       const slideNeedsNewRight=!rightIsMetal;
       const effectiveStep=slideNeedsNewRight?Math.max(step,bmMinW):step;
-      const canAfford=leftNeighbor.width>=effectiveStep||(leftNeighbor.width>=step&&!slideNeedsNewRight);
+      const inlayNeedsEdges=needsMetalEdges(selStrip.material);
+      const canAfford=leftNeighbor.width>=effectiveStep||(leftNeighbor.width>=step&&!slideNeedsNewRight)||(!inlayNeedsEdges&&leftNeighbor.width>0&&!slideNeedsNewRight);
       if(canAfford) controls.appendChild(h('button',{class:'strip-arrow',title:'Slide left',onClick:()=>{
         const savedStrips=state.strips.map(ss=>({...ss}));
         const savedSel=state.selectedStrip;
-        const moveAmt=slideNeedsNewRight?Math.min(effectiveStep,leftNeighbor.width):Math.min(step,leftNeighbor.width);
+        let moveAmt=slideNeedsNewRight?Math.min(effectiveStep,leftNeighbor.width):Math.min(step,leftNeighbor.width);
+        // If step would leave metal below min width and inlay doesn't need edges, consume all
+        if(!inlayNeedsEdges&&!slideNeedsNewRight){
+          const afterSlide=leftNeighbor.width-moveAmt;
+          if(afterSlide>0&&afterSlide<bmMinW) moveAmt=leftNeighbor.width;
+        }
         leftNeighbor.width=parseFloat((leftNeighbor.width-moveAmt).toFixed(2));
         
         // Grow or create metal on right side
@@ -2328,13 +2334,19 @@ function renderComposePanel(col){
       // When creating a new metal strip on left, need at least bmMinW
       const slideNeedsNewLeft=!leftIsMetal;
       const slideEffStep=slideNeedsNewLeft?Math.max(step,bmMinW):step;
-      const canAffordRight=rightIsMetal?(rightNeighbor.width>=step):remaining>=slideEffStep;
+      const inlayNeedsEdgesR=needsMetalEdges(selStrip.material);
+      const canAffordRight=rightIsMetal?(rightNeighbor.width>=step||(!inlayNeedsEdgesR&&rightNeighbor.width>0)):remaining>=slideEffStep;
       if(canAffordRight) controls.appendChild(h('button',{class:'strip-arrow',title:'Slide right',onClick:()=>{
         const savedStrips=state.strips.map(ss=>({...ss}));
         const savedSel=state.selectedStrip;
         if(rightIsMetal&&rightNeighbor){
           // Slide right by shrinking right metal neighbor
-          const moveAmt=slideNeedsNewLeft?Math.min(slideEffStep,rightNeighbor.width):Math.min(step,rightNeighbor.width);
+          let moveAmt=slideNeedsNewLeft?Math.min(slideEffStep,rightNeighbor.width):Math.min(step,rightNeighbor.width);
+          // If step would leave metal below min width and inlay doesn't need edges, consume all
+          if(!inlayNeedsEdgesR&&!slideNeedsNewLeft){
+            const afterSlide=rightNeighbor.width-moveAmt;
+            if(afterSlide>0&&afterSlide<bmMinW) moveAmt=rightNeighbor.width;
+          }
           rightNeighbor.width=parseFloat((rightNeighbor.width-moveAmt).toFixed(2));
           
           // Grow or create metal on left side
