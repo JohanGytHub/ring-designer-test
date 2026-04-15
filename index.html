@@ -2811,6 +2811,7 @@ function openAddStripModal(){
         updatePrice();
       }},['Add Strip'])
     ]));
+    if(searchFilter){const si=modal.querySelector('.mat-search');if(si){si.focus();si.selectionStart=si.selectionEnd=searchFilter.length;}}
   }
   
   render();
@@ -2938,6 +2939,7 @@ function openEditStripModal(idx){
         updatePrice();
       }},['Save Changes'])
     ]));
+    if(searchFilter){const si=modal.querySelector('.mat-search');if(si){si.focus();si.selectionStart=si.selectionEnd=searchFilter.length;}}
   }
   
   render();
