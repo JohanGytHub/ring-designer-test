@@ -2281,8 +2281,9 @@ function renderComposePanel(col){
   
   // Show remaining space as a ghost block
   if(state.strips.length>0 && remaining>0.01){
+    const ghostPx=Math.max(28, remaining*30);
     composer.appendChild(h('div',{
-      style:{flex:'1',minWidth:'28px',border:'1.5px dashed var(--border-light)',borderRadius:'3px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',opacity:'0.6',cursor:'pointer'},
+      style:{width:ghostPx+'px',minWidth:ghostPx+'px',border:'1.5px dashed var(--border-light)',borderRadius:'3px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',opacity:'0.6',cursor:'pointer'},
       onClick:()=>{state.selectedStrip=-1;openAddStripModal();}
     },[
       h('div',{style:{fontSize:'.55rem',color:'var(--text-muted)',textAlign:'center',lineHeight:'1.2'}},
