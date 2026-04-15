@@ -748,11 +748,15 @@ function calcPrice(){
     const pCost=calcPreciousMetalCost(bm, state.ringWidth, state.ringSize, hasInlays);
     total+=pCost;
     breakdown.push({label:`${bm} (Base Metal)`, price:pCost});
+    total+=278;
+    breakdown.push({label:`Precious Base Metal Misc`, price:278});
   } else if(DATA.p[bm] && DATA.p[bm].per_mm_base){
     // Per-mm pricing (e.g. Metal Mokume)
     const cost=DATA.p[bm].per_mm_base*state.ringWidth;
     total+=cost;
     breakdown.push({label:`${bm} (Base Metal, ${state.ringWidth}mm)`, price:cost});
+    total+=199;
+    breakdown.push({label:`Base Metal Misc`, price:199});
   } else {
     const pData=DATA.p[bm];
     if(pData){
@@ -763,6 +767,8 @@ function calcPrice(){
       else if(pData.fixed_price) cost=pData.fixed_price;
       total+=cost;
       breakdown.push({label:`${bm} (Base Metal)`, price:cost});
+      total+=199;
+      breakdown.push({label:`Base Metal Misc`, price:199});
     }
   }
   
@@ -772,10 +778,14 @@ function calcPrice(){
       const sCost=calcPreciousSleeveCost(slv, state.ringWidth, state.ringSize);
       total+=sCost;
       breakdown.push({label:`${slv} (Sleeve)`, price:sCost});
+      total+=199;
+      breakdown.push({label:`Precious Sleeve Metal Misc`, price:199});
     } else if(DATA.p[slv] && DATA.p[slv].per_mm_sleeve){
       const cost=DATA.p[slv].per_mm_sleeve*state.ringWidth;
       total+=cost;
       breakdown.push({label:`${slv} (Sleeve, ${state.ringWidth}mm)`, price:cost});
+      total+=149;
+      breakdown.push({label:`Sleeve Metal Misc`, price:149});
     } else {
       const sData=DATA.p[slv];
       if(sData){
@@ -785,6 +795,8 @@ function calcPrice(){
         else if(sData.fixed_price) cost=sData.fixed_price;
         total+=cost;
         breakdown.push({label:`${slv} (Sleeve)`, price:cost});
+        total+=149;
+        breakdown.push({label:`Sleeve Metal Misc`, price:149});
       }
     }
   }
@@ -844,6 +856,18 @@ function calcPrice(){
       const cost=getInlayPrice(strip.material, strip.width);
       total+=cost;
       breakdown.push({label:`${strip.material} (${strip.width}mm)`, price:cost});
+    }
+  }
+
+  // 4. Inlay misc (only when inlays exist)
+  if(hasInlays){
+    const hasPreciousInlay=state.strips.some(s=>!isMetal(s.material)&&isPrecious(s.material));
+    if(hasPreciousInlay){
+      total+=149;
+      breakdown.push({label:`Precious Inlay Metal Misc`, price:149});
+    } else {
+      total+=129;
+      breakdown.push({label:`Inlay Metal Misc`, price:129});
     }
   }
 
@@ -3298,11 +3322,16 @@ function patchPricingData(){
   if(!DATA.p['Black Ceramic']) DATA.p['Black Ceramic']={};
   const bc=DATA.p['Black Ceramic'];
   for(const k in ti150){if(!bc[k])bc[k]=ti150[k];}
-  // Damascus: per-mm base=$(0xAD*0x64+0x4B)/0x64 (from $695/4mm size 10), inlay by width (+$20 labor)
+  // Damascus: flat $580 for base metal, inlays, and inner sleeves (all sizes)
   if(!DATA.p['Damascus']) DATA.p['Damascus']={};
-  DATA.p['Damascus'].per_mm_base=(0xAD*0x64+0x4B)/0x64;
-  DATA.p['Damascus'].per_mm_sleeve=(0xAD*0x64+0x4B)/0x64;
-  DATA.p['Damascus'].inlay_by_width=[[1,28.85],[2,33.45],[3,38.05],[4,42.65],[5,47.25],[6,51.85],[7,56.45],[8,61.05],[9,65.65],[10,70.25]];
+  DATA.p['Damascus'].fixed_price=580;
+  DATA.p['Damascus'].sleeve=580;
+  DATA.p['Damascus'].sleeve_with_inlay=580;
+  DATA.p['Damascus'].full_ring=580;
+  DATA.p['Damascus'].partials=580;
+  delete DATA.p['Damascus'].per_mm_base;
+  delete DATA.p['Damascus'].per_mm_sleeve;
+  delete DATA.p['Damascus'].inlay_by_width;
   // Zirconium: per-mm base=$(0x34*0x64+0x39)/0x64 (from $368/7mm size 10), inlay by width (+$20 labor)
   if(!DATA.p['Zirconium']) DATA.p['Zirconium']={};
   DATA.p['Zirconium'].per_mm_base=(0x34*0x64+0x39)/0x64;
@@ -3318,7 +3347,7 @@ function patchPricingData(){
   DATA.p['Metal Mokume'].per_mm_base=150;
   DATA.p['Metal Mokume'].per_mm_inlay=75;
   DATA.p['Metal Mokume'].per_mm_sleeve=100;
-  console.log('Patched pricing: Damascus($(0xAD*0x64+0x4B)/0x64/mm), Zirconium($(0x34*0x64+0x39)/0x64/mm), Stainless($(0x31*0x64+0x4B)/0x64/mm), Black Ceramic(Ti×1.5), Mokume(per-mm), inlays+$20 labor');
+  console.log('Patched pricing: Damascus($580 flat), Zirconium($(0x34*0x64+0x39)/0x64/mm), Stainless($(0x31*0x64+0x4B)/0x64/mm), Black Ceramic(Ti×1.5), Mokume(per-mm)');
 }
 
 async function init(){
