@@ -746,21 +746,23 @@ function calcPrice(){
   const slv=state.sleeve||bm;
   const hasInlays=state.strips.some(s=>!isMetal(s.material));
   const hasNonMetalInlays=state.strips.some(s=>!isMetal(s.material)&&!isMetalGroup(s.material));
+  // misc() reads misc_costs from jbj-pricing.json (via DATA.misc_costs). Fallback only if KV is unreachable AND embedded data lacks misc_costs.
+  const misc=(k,dflt)=>(DATA.misc_costs&&DATA.misc_costs[k]!=null?DATA.misc_costs[k]:dflt);
   
   // 1. Base metal cost (always included, as if sleeve = base metal)
   if(isPrecious(bm)){
     const pCost=calcPreciousMetalCost(bm, state.ringWidth, state.ringSize, hasInlays);
     total+=pCost;
     breakdown.push({label:`${bm} (Base Metal)`, price:pCost});
-    total+=278;
-    breakdown.push({label:`Precious Base Metal Misc`, price:278});
+    total+=misc('precious_base_metal',278);
+    breakdown.push({label:`Precious Base Metal Misc`, price:misc('precious_base_metal',278)});
   } else if(DATA.p[bm] && DATA.p[bm].per_mm_base){
     // Per-mm pricing (e.g. Metal Mokume)
     const cost=DATA.p[bm].per_mm_base*state.ringWidth;
     total+=cost;
     breakdown.push({label:`${bm} (Base Metal, ${state.ringWidth}mm)`, price:cost});
-    total+=199;
-    breakdown.push({label:`Base Metal Misc`, price:199});
+    total+=misc('non_precious_base_metal',199);
+    breakdown.push({label:`Base Metal Misc`, price:misc('non_precious_base_metal',199)});
   } else {
     const pData=DATA.p[bm];
     if(pData){
@@ -771,8 +773,8 @@ function calcPrice(){
       else if(pData.fixed_price) cost=pData.fixed_price;
       total+=cost;
       breakdown.push({label:`${bm} (Base Metal)`, price:cost});
-      total+=199;
-      breakdown.push({label:`Base Metal Misc`, price:199});
+      total+=misc('non_precious_base_metal',199);
+      breakdown.push({label:`Base Metal Misc`, price:misc('non_precious_base_metal',199)});
     }
   }
   
@@ -782,14 +784,14 @@ function calcPrice(){
       const sCost=calcPreciousSleeveCost(slv, state.ringWidth, state.ringSize);
       total+=sCost;
       breakdown.push({label:`${slv} (Sleeve)`, price:sCost});
-      total+=199;
-      breakdown.push({label:`Precious Sleeve Metal Misc`, price:199});
+      total+=misc('precious_sleeve',199);
+      breakdown.push({label:`Precious Sleeve Metal Misc`, price:misc('precious_sleeve',199)});
     } else if(DATA.p[slv] && DATA.p[slv].per_mm_sleeve){
       const cost=DATA.p[slv].per_mm_sleeve*state.ringWidth;
       total+=cost;
       breakdown.push({label:`${slv} (Sleeve, ${state.ringWidth}mm)`, price:cost});
-      total+=149;
-      breakdown.push({label:`Sleeve Metal Misc`, price:149});
+      total+=misc('non_precious_sleeve',149);
+      breakdown.push({label:`Sleeve Metal Misc`, price:misc('non_precious_sleeve',149)});
     } else {
       const sData=DATA.p[slv];
       if(sData){
@@ -799,8 +801,8 @@ function calcPrice(){
         else if(sData.fixed_price) cost=sData.fixed_price;
         total+=cost;
         breakdown.push({label:`${slv} (Sleeve)`, price:cost});
-        total+=149;
-        breakdown.push({label:`Sleeve Metal Misc`, price:149});
+        total+=misc('non_precious_sleeve',149);
+        breakdown.push({label:`Sleeve Metal Misc`, price:misc('non_precious_sleeve',149)});
       }
     }
   }
@@ -867,11 +869,11 @@ function calcPrice(){
   if(hasInlays){
     const hasPreciousInlay=state.strips.some(s=>!isMetal(s.material)&&isPrecious(s.material));
     if(hasPreciousInlay){
-      total+=149;
-      breakdown.push({label:`Precious Inlay Metal Misc`, price:149});
+      total+=misc('precious_inlay',149);
+      breakdown.push({label:`Precious Inlay Metal Misc`, price:misc('precious_inlay',149)});
     } else {
-      total+=129;
-      breakdown.push({label:`Inlay Metal Misc`, price:129});
+      total+=misc('non_precious_inlay',129);
+      breakdown.push({label:`Inlay Metal Misc`, price:misc('non_precious_inlay',129)});
     }
   }
 
