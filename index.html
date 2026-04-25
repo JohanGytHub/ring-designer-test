@@ -909,6 +909,7 @@ function calcPreciousMetalCost(metalName, ringWidthMm, ringSize, hasInlays){
   const weightScrap=metalWeight*1.05;
   
   // Spot price
+  if(!state.spotPrices) return 0; // pricing not loaded yet
   let spotPerOz=state.spotPrices.Gold;
   let karatFactor=1;
   if(metalName.includes('Platinum')){spotPerOz=state.spotPrices.Platinum;karatFactor=1;}
@@ -938,6 +939,7 @@ function calcPreciousSleeveCost(metalName, ringWidthMm, ringSize){
   else if(metalName.includes('Silver')) density=(0x419/0x64);
   const weight=vol*density;
   const weightScrap=weight*1.05;
+  if(!state.spotPrices) return 0; // pricing not loaded yet
   let spotPerOz=state.spotPrices.Gold;
   let karatFactor=1;
   if(metalName.includes('Platinum')){spotPerOz=state.spotPrices.Platinum;karatFactor=1;}
@@ -965,6 +967,7 @@ function calcPinstripePrice(metalName, widthMm, ringSize, qty, isInlay){
   const weight=vol*density;
   const weightScrap=weight*1.05;
   
+  if(!state.spotPrices) return 0; // pricing not loaded yet
   let spotPerOz=state.spotPrices.Gold;
   let karatFactor=1;
   if(metalName.includes('Platinum')){spotPerOz=state.spotPrices.Platinum;karatFactor=1;}
@@ -1026,48 +1029,78 @@ function getInlayPrice(materialName, widthMm){
 
 // ── FETCH LIVE SPOT PRICES ──
 async function fetchSpotPrices(){
-  // Primary: Cloudflare Worker proxy (server-to-server, no browser CORS/iframe restrictions)
+  const showError=(msg)=>{
+    console.error('%c❌ Spot prices failed: '+msg,'color:#c0392b;font-weight:bold');
+    const banner=document.getElementById('pricing-error-banner');
+    if(banner) return; // already shown
+    const errorDiv=document.createElement('div');
+    errorDiv.id='pricing-error-banner';
+    errorDiv.style.cssText='background:#f8d7da;border:1px solid #f5c6cb;color:#721c24;padding:12px;margin:8px;border-radius:4px;text-align:center;font-size:0.9rem;';
+    errorDiv.innerHTML='<strong>⚠️ Pricing temporarily unavailable.</strong><br>Please refresh the page or try again later. <button onclick="window.location.reload()" style="margin-left:8px;padding:4px 8px;background:#721c24;color:white;border:none;border-radius:3px;cursor:pointer;">Refresh</button>';
+    document.querySelector('.main-content').prepend(errorDiv);
+  };
+
+  // Initialize spotPrices if null
+  if(!state.spotPrices) state.spotPrices={Gold:0,Platinum:0,Silver:0};
+
+  // Primary: Cloudflare Worker proxy
   try{
     const res=await fetch('https://jbj-spot-prices.johan-475.workers.dev/');
     if(res.ok){
       const d=await res.json();
+      if(d.error){
+        showError('KV pricing unavailable: '+d.error);
+        return;
+      }
       if(d.gold||d.platinum||d.silver){
         // Validate spot prices are in reasonable range before accepting
         if(d.gold>500&&d.gold<15000) state.spotPrices.Gold=d.gold;
         if(d.platinum>300&&d.platinum<5000) state.spotPrices.Platinum=d.platinum;
         if(d.silver>10&&d.silver<200) state.spotPrices.Silver=d.silver;
-        state.spotsLoaded=true;
-        console.log('%c✅ Spot prices loaded from: CF Worker (jbj-spot-prices)','color:#4a7c59;font-weight:bold');
-        console.log('   Source API: '+(d.source||'unknown')+' | Gold: $'+state.spotPrices.Gold+'/oz | Platinum: $'+state.spotPrices.Platinum+'/oz | Silver: $'+state.spotPrices.Silver+'/oz');
-        updatePrice();
-        return;
+        
+        // Check that we got at least one valid price
+        if(state.spotPrices.Gold>0||state.spotPrices.Platinum>0||state.spotPrices.Silver>0){
+          state.spotsLoaded=true;
+          console.log('%c✅ Spot prices loaded from: CF Worker (KV)','color:#4a7c59;font-weight:bold');
+          console.log('   Source API: '+(d.source||'unknown')+' | Gold: $'+state.spotPrices.Gold+'/oz | Platinum: $'+state.spotPrices.Platinum+'/oz | Silver: $'+state.spotPrices.Silver+'/oz');
+          updatePrice();
+          return;
+        }
       }
-    }
-  }catch(e){console.warn('CF spot worker failed:',e);}
-
-  // Fallback: gold-api.com direct (may be blocked in iframe contexts)
-  try{
-    const [gRes,pRes,sRes]=await Promise.all([
-      fetch('https://api.gold-api.com/price/XAU'),
-      fetch('https://api.gold-api.com/price/XPT'),
-      fetch('https://api.gold-api.com/price/XAG')
-    ]);
-    const [g,p,s]=[await gRes.json(),await pRes.json(),await sRes.json()];
-    if(g.price||p.price||s.price){
-      if(g.price>500&&g.price<15000) state.spotPrices.Gold=g.price;
-      if(p.price>300&&p.price<5000) state.spotPrices.Platinum=p.price;
-      if(s.price>10&&s.price<200) state.spotPrices.Silver=s.price;
-      state.spotsLoaded=true;
-      console.log('%c✅ Spot prices loaded from: gold-api.com (fallback)','color:#4a7c59;font-weight:bold');
-      console.log('   Gold: $'+state.spotPrices.Gold+'/oz | Platinum: $'+state.spotPrices.Platinum+'/oz | Silver: $'+state.spotPrices.Silver+'/oz');
-      updatePrice();
+    } else if(res.status===503){
+      const errorData=await res.json().catch(()=>({}));
+      showError(errorData.error||'Service temporarily unavailable');
       return;
     }
-  }catch(e){console.warn('gold-api.com fallback failed:',e);}
+  }catch(e){
+    console.warn('CF spot worker failed:',e);
+  }
+
+  // Retry after 2 seconds
+  try{
+    await new Promise(resolve=>setTimeout(resolve,2000));
+    const res=await fetch('https://jbj-spot-prices.johan-475.workers.dev/');
+    if(res.ok){
+      const d=await res.json();
+      if(d.gold||d.platinum||d.silver){
+        if(d.gold>500&&d.gold<15000) state.spotPrices.Gold=d.gold;
+        if(d.platinum>300&&d.platinum<5000) state.spotPrices.Platinum=d.platinum;
+        if(d.silver>10&&d.silver<200) state.spotPrices.Silver=d.silver;
+        
+        if(state.spotPrices.Gold>0||state.spotPrices.Platinum>0||state.spotPrices.Silver>0){
+          state.spotsLoaded=true;
+          console.log('%c✅ Spot prices loaded from: CF Worker (retry)','color:#4a7c59;font-weight:bold');
+          updatePrice();
+          return;
+        }
+      }
+    }
+  }catch(e2){
+    console.warn('CF spot worker retry failed:',e2);
+  }
   
-  // If all fail, use defaults
-  console.log('%c⚠️ Spot prices: USING HARDCODED DEFAULTS (both API sources failed)','color:#c0392b;font-weight:bold');
-  console.log('   Default Gold: $'+state.spotPrices.Gold+'/oz | Platinum: $'+state.spotPrices.Platinum+'/oz | Silver: $'+state.spotPrices.Silver+'/oz');
+  // All failed — show error banner, disable submission
+  showError('Unable to load current precious metal prices');
 }
 
 // ── 3D RING RENDERER (Canvas) ──
@@ -3191,8 +3224,20 @@ function renderSummaryPanel(col){
   
   const isValidEmail=(e)=>/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
   
-  const submitBtn=h('button',{class:'btn btn-gold',style:{width:'100%',padding:'12px',marginTop:'4px',fontSize:'.85rem'},
+  const submitBtn=h('button',{
+    class:'btn btn-gold',
+    style:{
+      width:'100%',padding:'12px',marginTop:'4px',fontSize:'.85rem',
+      opacity:state.spotsLoaded?'1':'0.6',
+      cursor:state.spotsLoaded?'pointer':'not-allowed'
+    },
     onClick:async()=>{
+      if(!state.spotsLoaded){
+        submitStatus.style.display='block';
+        submitStatus.style.color='#c0392b';
+        submitStatus.textContent='Pricing data not loaded yet. Please refresh the page and try again.';
+        return;
+      }
       if(!isValidEmail(state.email)){
         emailErr.style.display='block';
         emailInput.style.borderColor='#c0392b';
@@ -3256,7 +3301,27 @@ function renderSummaryPanel(col){
         submitStatus.textContent='Something went wrong. Please try again or email us directly at support@jewelrybyjohan.com.';
       }
     }
-  },['Submit Design Request']);
+  },state.spotsLoaded ? ['Submit Design Request'] : ['Loading Prices...']);
+  
+  // Update button appearance when spots load
+  if(!state.spotsLoaded){
+    submitBtn.disabled=true;
+    const updateSubmitBtn=()=>{
+      if(state.spotsLoaded){
+        submitBtn.disabled=false;
+        submitBtn.textContent='Submit Design Request';
+        submitBtn.style.opacity='1';
+        submitBtn.style.cursor='pointer';
+      }
+    };
+    // Check periodically for spotPrices loading
+    const checkInterval=setInterval(()=>{
+      if(state.spotsLoaded){
+        updateSubmitBtn();
+        clearInterval(checkInterval);
+      }
+    },500);
+  }
   form.appendChild(submitBtn);
   form.appendChild(submitStatus);
   col.appendChild(form);
